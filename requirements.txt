@@ -5,3 +5,4 @@ numpy
 gensim
 requests
 tqdm
+scikit-learn
