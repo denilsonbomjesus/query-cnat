@@ -6,3 +6,5 @@ gensim
 requests
 tqdm
 scikit-learn
+matplotlib
+geneticalgorithm
