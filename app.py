@@ -71,7 +71,7 @@ buscador = carregar_buscador()
 st.header("Faça sua consulta")
 
 # Entrada do usuário
-query_usuario = st.text_input("Termo de busca (ex: pré-eclâmpsia):", "pré-eclâmpsia")
+query_usuario = st.text_input("Termo de busca (ex: pre-eclampsia):", "pre-eclampsia")
 n_termos = st.slider("Nº de termos para expansão (N do AG):", min_value=3, max_value=20, value=10)
 
 if st.button("Buscar Tabelas Relevantes"):
