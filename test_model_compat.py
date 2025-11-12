@@ -1,6 +1,7 @@
 # test_model_compat.py
 from transformers import AutoTokenizer, AutoModel
-model_id = "pucpr/biobertpt-all"
+# model_id = "pucpr/biobertpt-all"
+model_id = "dmis-lab/biobert-base-cased-v1.1"
 print("Testando:", model_id)
 
 try:

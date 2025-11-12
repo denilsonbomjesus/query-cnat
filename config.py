@@ -27,6 +27,7 @@ INDEX_PATH = os.path.join(BASE_DIR, "tabelas_index.json")
 # --- Configurações dos Modelos ---
 # BERT_MODEL_NAME = 'neuralmind/bert-base-portuguese-cased'
 BERT_MODEL_NAME = 'pucpr/biobertpt-all'
+BERT_EN_MODEL_NAME = 'dmis-lab/biobert-base-cased-v1.1'
 
 # --- Configurações do AG (Etapa 3) ---
 GA_PARAMS = {
