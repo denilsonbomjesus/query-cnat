@@ -19,7 +19,8 @@ V_TABELAS_PATH = os.path.join(BASE_DIR, "v_tabelas.npy")
 INDEX_PATH = os.path.join(BASE_DIR, "tabelas_index.json")
 
 # --- Configurações dos Modelos ---
-BERT_MODEL_NAME = 'neuralmind/bert-base-portuguese-cased'
+# BERT_MODEL_NAME = 'neuralmind/bert-base-portuguese-cased'
+BERT_MODEL_NAME = 'pucpr/biobertpt-all'
 
 # --- Configurações do AG (Etapa 3) ---
 GA_PARAMS = {

@@ -6,6 +6,7 @@ import torch
 from transformers import BertTokenizer, BertModel
 from gensim.models import KeyedVectors
 from sklearn.preprocessing import normalize
+from sklearn.metrics.pairwise import cosine_similarity
 import logging
 import os
 import time
@@ -38,7 +39,7 @@ class BuscadorSemantico:
         self.index_tabelas_map = None # Mapa: id -> nome
 
         self._load_bert()
-        self._load_w2v()
+        # self._load_w2v()
         self._load_table_vectors()
         
         logging.info("BuscadorSemantico pronto para uso.")
@@ -95,19 +96,59 @@ class BuscadorSemantico:
         cls_embedding = outputs.last_hidden_state[0, 0, :].cpu().numpy()
         return cls_embedding
 
+    # def expandir_consulta(self, query, n=10):
+    #     query = query.lower()
+    #     termos_candidatos = []
+    #     if query in self.w2v_model:
+    #         termos_candidatos.append((query, 1.0))
+    #     else:
+    #         logging.warning(f"Termo da consulta '{query}' não encontrado no W2V. Usando apenas ele.")
+    #         return [(query, 1.0)]
+    #     try:
+    #         similar_words = self.w2v_model.most_similar(query, topn=n-1)
+    #         termos_candidatos.extend(similar_words)
+    #     except Exception as e:
+    #         logging.warning(f"Erro ao buscar similares para '{query}': {e}")
+    #     return termos_candidatos
+
     def expandir_consulta(self, query, n=10):
+        """
+        Expande a consulta usando BioBERTpt e um vocabulário médico (CID-10).
+        O vocabulário fornece contexto especializado em saúde.
+        """
         query = query.lower()
-        termos_candidatos = []
-        if query in self.w2v_model:
-            termos_candidatos.append((query, 1.0))
-        else:
-            logging.warning(f"Termo da consulta '{query}' não encontrado no W2V. Usando apenas ele.")
-            return [(query, 1.0)]
-        try:
-            similar_words = self.w2v_model.most_similar(query, topn=n-1)
-            termos_candidatos.extend(similar_words)
-        except Exception as e:
-            logging.warning(f"Erro ao buscar similares para '{query}': {e}")
+        logging.info(f"Expandindo termo '{query}' com vocabulário CID-10 + BioBERTpt...")
+
+        # Carrega e limpa o vocabulário CID-10
+        vocab_path = os.path.join(parent_dir, "asset", "cid10_vocab.txt")
+        with open(vocab_path, "r", encoding="utf-8") as f:
+            vocab_lines = f.readlines()
+
+        # Mantém apenas termos válidos
+        vocab = []
+        for line in vocab_lines:
+            line = line.strip().lower()
+            if 3 <= len(line) <= 100 and not line.startswith(("capítulo", "seção")):
+                vocab.append(line)
+
+        # Vetoriza o termo da consulta
+        query_vec = self._get_bert_embedding(query).reshape(1, -1)
+
+        # Para desempenho, limita o vocabulário analisado
+        subset = vocab[:2000]
+
+        # Vetoriza e calcula similaridades
+        embeddings = [self._get_bert_embedding(word) for word in subset]
+        sims = cosine_similarity(query_vec, np.array(embeddings))[0]
+        top_indices = np.argsort(sims)[::-1][:n]
+
+        termos_candidatos = [(subset[i], float(sims[i])) for i in top_indices]
+
+        # Garante o termo original na lista
+        if query not in [t for t, _ in termos_candidatos]:
+            termos_candidatos.insert(0, (query, 1.0))
+
+        logging.info(f"Termos expandidos (BioBERT + CID-10): {termos_candidatos}")
         return termos_candidatos
 
     def vetorizar_termos_candidatos(self, termos):
