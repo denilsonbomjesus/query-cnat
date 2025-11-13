@@ -14,6 +14,7 @@ import time
 import sys
 from functools import lru_cache
 from tradutor import TradutorPTEN
+import unicodedata
 
 # --- Mágica para importar o config.py da raiz ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -26,6 +27,11 @@ import config  # Importa o config.py da raiz
 # Configura o logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+def normalize_text(text):
+    """Remove acentos, converte para minúsculas e remove espaços extras."""
+    if not text: return ""
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("utf-8")
+    return " ".join(text.lower().split())
 
 class BuscadorSemantico:
     """ Encapsula toda a lógica de busca semântica. """
@@ -67,7 +73,20 @@ class BuscadorSemantico:
 
         self.tradutor = TradutorPTEN()
 
+        self.last_query = ""           # <--- ADICIONE ESTA LINHA
+        self.termos_expandidos = []    # <--- ADICIONE ESTA LINHA
+
         logging.info("BuscadorSemantico pronto para uso.")
+
+    def _get_bert_mean_pooling_embedding(self, model_output, attention_mask):
+            """Aplica Mean Pooling para obter um embedding de nível de sentença."""
+            last_hidden_state = model_output.last_hidden_state
+            input_mask_expanded = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
+            sum_embeddings = torch.sum(last_hidden_state * input_mask_expanded, 1)
+            sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+            mean_embedding = sum_embeddings / sum_mask
+            return mean_embedding.cpu().numpy()[0]
+        # -------------------------------------------
 
     # ---------------- BERT Loading & Embeddings ----------------
     def _load_bert(self):
@@ -94,41 +113,55 @@ class BuscadorSemantico:
             logging.error(f"❌ Falha ao carregar modelos BERT: {e}")
             raise
 
+    # Dentro da classe BuscadorSemantico
     def _get_bert_embedding(self, text, lang='auto'):
         """
         Gera o embedding CLS de um texto.
         lang='auto' escolhe automaticamente o modelo com base no W2V ativo.
         Usa cache para acelerar múltiplas consultas.
         """
-        # chave para cache
-        cache_key = f"{lang}||{text}"
-        if cache_key in self._bert_embedding_cache:
-            return self._bert_embedding_cache[cache_key]
+        
+        # --- LÓGICA DE NORMALIZAÇÃO MODIFICADA ---
+        text_to_embed = text
+        text_normalized_pt = ""
 
         # Define o tokenizer/model a usar
         if lang == 'auto':
             if config.ACTIVE_W2V_MODEL.lower() == 'biowordvec' and self.bert_en:
                 tokenizer, model = self.tokenizer_en, self.bert_en
+                text_to_embed = text # Inglês, cased, sem normalização
             else:
                 tokenizer, model = self.tokenizer_pt, self.bert_pt
+                text_to_embed = normalize_text(text) # Português, normalizado
         elif lang == 'en':
             if not self.bert_en:
-                # fallback para pt se en não disponível
                 tokenizer, model = self.tokenizer_pt, self.bert_pt
+                text_to_embed = normalize_text(text) # Fallback para PT, normalizado
             else:
                 tokenizer, model = self.tokenizer_en, self.bert_en
-        else:
+                text_to_embed = text # Inglês, cased, sem normalização
+        else: # lang == 'pt'
             tokenizer, model = self.tokenizer_pt, self.bert_pt
+            text_to_embed = normalize_text(text) # Português, normalizado
+        
+        # A chave de cache deve usar o texto que realmente será embutido
+        cache_key = f"{lang}||{text_to_embed}"
+        if cache_key in self._bert_embedding_cache:
+            return self._bert_embedding_cache[cache_key]
+        # --- FIM DAS MUDANÇAS NA LÓGICA ---
 
-        inputs = tokenizer(text, return_tensors='pt', truncation=True, max_length=512, padding=True)
+        # --- PARTE DA INFERÊNCIA MODIFICADA ---
+        inputs = tokenizer(text_to_embed, return_tensors='pt', truncation=True, max_length=512, padding=True)
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
         with torch.no_grad():
             outputs = model(**inputs)
-        cls_embedding = outputs.last_hidden_state[0, 0, :].cpu().numpy()
+        
+        # CHAMA A NOVA FUNÇÃO DE MEAN POOLING
+        mean_embedding = self._get_bert_mean_pooling_embedding(outputs, inputs['attention_mask'])
+        # --- FIM DA MODIFICAÇÃO ---
 
-        # salva no cache
-        self._bert_embedding_cache[cache_key] = cls_embedding
-        return cls_embedding
+        self._bert_embedding_cache[cache_key] = mean_embedding
+        return mean_embedding
 
     # ---------------- W2V Loading ----------------
     def _load_w2v(self):
@@ -160,6 +193,11 @@ class BuscadorSemantico:
                 self.tabelas_index_map = json.load(f)
 
             self.index_tabelas_map = {v: k for k, v in self.tabelas_index_map.items()}
+
+            self.vetores_tabelas = self.v_tabelas  # alias com nome intuitivo
+            # cria lista de nomes ordenada pelo índice (0..N-1)
+            self.nomes_tabelas = [self.index_tabelas_map[i] for i in range(self.v_tabelas.shape[0])]
+
             logging.info(f"Vetores das tabelas (shape: {self.v_tabelas.shape}) e índices carregados.")
         except Exception as e:
             logging.error(f"Falha ao carregar os arquivos das tabelas: {e}")
@@ -367,12 +405,23 @@ class BuscadorSemantico:
             resultado_final = list(zip(traduzidos, [s for t, s in resultado_final]))
             logging.info("✅ Tradução concluída.")
 
+        self.last_query = query_original # Salva a query original (ex: 'colesterol')
+        self.termos_expandidos = [t for t, s in resultado_final] # Salva os termos traduzidos
+        # ----------------------------------------
+
         return resultado_final
 
     # ---------------- Vetorização e composição da consulta ----------------
+    # def vetorizar_termos_candidatos(self, termos):
+    #     logging.info(f"Vetorizando {len(termos)} termos candidatos com BERT...")
+    #     v_candidatos = [self._get_bert_embedding(termo) for termo in termos]
+    #     return v_candidatos
+
     def vetorizar_termos_candidatos(self, termos):
-        logging.info(f"Vetorizando {len(termos)} termos candidatos com BERT...")
-        v_candidatos = [self._get_bert_embedding(termo) for termo in termos]
+        logging.info(f"Vetorizando {len(termos)} termos candidatos com BERT (PT)...")
+        # Força o uso do modelo Português (lang='pt'), que é o mesmo
+        # usado para vetorizar as tabelas (v_tabelas.npy).
+        v_candidatos = [self._get_bert_embedding(termo, lang='pt') for termo in termos]
         return v_candidatos
 
     def criar_vetor_consulta_ponderado(self, v_candidatos, pesos):

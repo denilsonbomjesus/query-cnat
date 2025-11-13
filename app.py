@@ -48,7 +48,12 @@ def rodar_pipeline_busca(buscador, query_usuario, n_termos=10):
     
     # O AG otimiza os pesos para os V_CANDIDATOS
     with st.spinner('O AG está aprendendo a melhor consulta... (Isso pode levar um minuto)'):
-        w_otimizado = rodar_otimizacao_ga(buscador, v_candidatos)
+        w_otimizado = rodar_otimizacao_ga(
+            buscador,
+            v_candidatos,
+            buscador.vetores_tabelas,
+            buscador.nomes_tabelas
+        )
 
     st.write("AG concluído! Pesos otimizados encontrados.")
 
