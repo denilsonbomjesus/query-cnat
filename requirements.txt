@@ -7,7 +7,6 @@ requests
 tqdm
 scikit-learn
 matplotlib
-geneticalgorithm
 streamlit
 deep-translator
 pygad
