@@ -1,7 +1,7 @@
-# test_model_compat.py
+# bert_model_compat.py
 from transformers import AutoTokenizer, AutoModel
-# model_id = "pucpr/biobertpt-all"
-model_id = "dmis-lab/biobert-base-cased-v1.1"
+# model_id = "pucpr/biobertpt-all" # Modelo BIOBerto em PT-BR
+model_id = "dmis-lab/biobert-base-cased-v1.1" # Modelo BIOBerto em EN
 print("Testando:", model_id)
 
 try:

@@ -1,4 +1,4 @@
-# app.py (O Ponto de Entrada Final)
+# app.py (O Ponto de Entrada)
 
 import streamlit as st
 import pandas as pd

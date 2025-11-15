@@ -22,7 +22,6 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
 import config  # Importa o config.py da raiz
-# ------------------------------------------------
 
 # Configura o logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -73,8 +72,8 @@ class BuscadorSemantico:
 
         self.tradutor = TradutorPTEN()
 
-        self.last_query = ""           # <--- ADICIONE ESTA LINHA
-        self.termos_expandidos = []    # <--- ADICIONE ESTA LINHA
+        self.last_query = ""
+        self.termos_expandidos = []
 
         logging.info("BuscadorSemantico pronto para uso.")
 
@@ -86,7 +85,6 @@ class BuscadorSemantico:
             sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
             mean_embedding = sum_embeddings / sum_mask
             return mean_embedding.cpu().numpy()[0]
-        # -------------------------------------------
 
     # ---------------- BERT Loading & Embeddings ----------------
     def _load_bert(self):
@@ -121,7 +119,7 @@ class BuscadorSemantico:
         Usa cache para acelerar múltiplas consultas.
         """
         
-        # --- LÓGICA DE NORMALIZAÇÃO MODIFICADA ---
+        # --- LÓGICA DE NORMALIZAÇÃO ---
         text_to_embed = text
         text_normalized_pt = ""
 
@@ -148,17 +146,14 @@ class BuscadorSemantico:
         cache_key = f"{lang}||{text_to_embed}"
         if cache_key in self._bert_embedding_cache:
             return self._bert_embedding_cache[cache_key]
-        # --- FIM DAS MUDANÇAS NA LÓGICA ---
 
-        # --- PARTE DA INFERÊNCIA MODIFICADA ---
+        # --- PARTE DA INFERÊNCIA ---
         inputs = tokenizer(text_to_embed, return_tensors='pt', truncation=True, max_length=512, padding=True)
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
         with torch.no_grad():
             outputs = model(**inputs)
         
-        # CHAMA A NOVA FUNÇÃO DE MEAN POOLING
         mean_embedding = self._get_bert_mean_pooling_embedding(outputs, inputs['attention_mask'])
-        # --- FIM DA MODIFICAÇÃO ---
 
         self._bert_embedding_cache[cache_key] = mean_embedding
         return mean_embedding
@@ -412,11 +407,6 @@ class BuscadorSemantico:
         return resultado_final
 
     # ---------------- Vetorização e composição da consulta ----------------
-    # def vetorizar_termos_candidatos(self, termos):
-    #     logging.info(f"Vetorizando {len(termos)} termos candidatos com BERT...")
-    #     v_candidatos = [self._get_bert_embedding(termo) for termo in termos]
-    #     return v_candidatos
-
     def vetorizar_termos_candidatos(self, termos):
         logging.info(f"Vetorizando {len(termos)} termos candidatos com BERT (PT)...")
         # Força o uso do modelo Português (lang='pt'), que é o mesmo
@@ -444,5 +434,3 @@ class BuscadorSemantico:
             score = scores[idx]
             ranking.append((table_name, float(score)))
         return ranking
-
-# ---------------- end of file ----------------

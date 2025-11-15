@@ -1,11 +1,11 @@
 # etapa3/otimizador_ga.py
 """
 GA otimizado para busca semântica médica/hospitalar
-Versão aprimorada:
-✅ Mantém expansão semântica existente
-✅ Reforça peso da palavra pesquisada
-✅ Penaliza tabelas irrelevantes lexicalmente
-✅ Alinha melhor vetor de consulta com tabelas reais
+Fluxo:
+- Mantém expansão semântica existente
+- Reforça peso da palavra pesquisada
+- Penaliza tabelas irrelevantes lexicalmente
+- Alinha melhor vetor de consulta com tabelas reais
 """
 
 import os
@@ -138,14 +138,13 @@ class GAOptimizer:
                 # ao gene da query original (sol[found_index]).
                 # O fator 5.0 torna este bônus significativo.
                 query_gene_bonus = 5.0 * sol[found_index]
-        # --- FIM DA LÓGICA DE BÔNUS ---
 
         # Calcula o fitness final somando todos os componentes
         fitness = (
             self.alpha_topk * sum_topk
             + self.gamma_bert * bert_metric
             + self.delta_table * table_align
-            + query_gene_bonus               # <--- BÔNUS ADICIONADO AQUI
+            + query_gene_bonus # <--- BÔNUS
             - self.beta_diversity * penalty
         )
 
