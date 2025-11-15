@@ -1,4 +1,4 @@
-# app.py (O Ponto de Entrada Final)
+# app.py (O Ponto de Entrada)
 
 import streamlit as st
 import pandas as pd
@@ -48,7 +48,12 @@ def rodar_pipeline_busca(buscador, query_usuario, n_termos=10):
     
     # O AG otimiza os pesos para os V_CANDIDATOS
     with st.spinner('O AG está aprendendo a melhor consulta... (Isso pode levar um minuto)'):
-        w_otimizado = rodar_otimizacao_ga(buscador, v_candidatos)
+        w_otimizado = rodar_otimizacao_ga(
+            buscador,
+            v_candidatos,
+            buscador.vetores_tabelas,
+            buscador.nomes_tabelas
+        )
 
     st.write("AG concluído! Pesos otimizados encontrados.")
 
@@ -71,7 +76,7 @@ buscador = carregar_buscador()
 st.header("Faça sua consulta")
 
 # Entrada do usuário
-query_usuario = st.text_input("Termo de busca (ex: pré-eclâmpsia):", "pré-eclâmpsia")
+query_usuario = st.text_input("Termo de busca (ex: pre-eclampsia):", "pre-eclampsia")
 n_termos = st.slider("Nº de termos para expansão (N do AG):", min_value=3, max_value=20, value=10)
 
 if st.button("Buscar Tabelas Relevantes"):

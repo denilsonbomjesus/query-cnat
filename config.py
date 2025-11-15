@@ -12,14 +12,22 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 JSON_FILE_PATH = os.path.join(BASE_DIR, "asset", "metadata_advanced_consolidated.json")
 
 # Modelo W2V
-W2V_MODEL_PATH = os.path.join(BASE_DIR, "nilc_model", "cbow_s300.txt")
+# W2V_MODEL_PATH = os.path.join(BASE_DIR, "nilc_model", "cbow_s300.txt")
+
+# Novo modelo BioWordVec (inglês biomédico)
+BIOWORDVEC_MODEL_PATH = os.path.join(BASE_DIR, "modelos", "biowordvec_500k.kv")
+
+# Escolha qual modelo usar (opções: 'nilc' ou 'biowordvec')
+ACTIVE_W2V_MODEL = 'biowordvec'
 
 # --- Caminhos dos Artefatos Gerados (Saída da Etapa 1) ---
 V_TABELAS_PATH = os.path.join(BASE_DIR, "v_tabelas.npy")
 INDEX_PATH = os.path.join(BASE_DIR, "tabelas_index.json")
 
 # --- Configurações dos Modelos ---
-BERT_MODEL_NAME = 'neuralmind/bert-base-portuguese-cased'
+# BERT_MODEL_NAME = 'neuralmind/bert-base-portuguese-cased'
+BERT_MODEL_NAME = 'pucpr/biobertpt-all'
+BERT_EN_MODEL_NAME = 'dmis-lab/biobert-base-cased-v1.1'
 
 # --- Configurações do AG (Etapa 3) ---
 GA_PARAMS = {

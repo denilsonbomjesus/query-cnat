@@ -24,7 +24,8 @@ def main():
         return
 
     # 2. Definir a consulta do usuário
-    query_usuario = "pré-eclâmpsia"
+    query_usuario = "pre-eclampsia"
+    # query_usuario = "hypertension"
     N_TERMOS = 10 # Número de termos para expansão (o AG otimizará N pesos)
 
     # --- Início do pipeline (o que rodará em tempo real) ---
