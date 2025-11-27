@@ -15,6 +15,7 @@ import sys
 from functools import lru_cache
 from tradutor import TradutorPTEN
 import unicodedata
+from typing import Dict, Any
 
 # --- Mágica para importar o config.py da raiz ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -413,6 +414,32 @@ class BuscadorSemantico:
         # usado para vetorizar as tabelas (v_tabelas.npy).
         v_candidatos = [self._get_bert_embedding(termo, lang='pt') for termo in termos]
         return v_candidatos
+
+    def vetorizar_colunas(self, nomes_colunas: list[str], descriptions: Dict[str, str] = None) -> Dict[str, np.ndarray]:
+        """
+        Gera embeddings BERT para uma lista de nomes de colunas (e suas descrições, se fornecidas).
+        Retorna um dicionário mapeando o nome da coluna para o seu vetor.
+
+        Args:
+            nomes_colunas (list[str]): Uma lista de nomes de colunas.
+            descriptions (Dict[str, str], optional): Um dicionário mapeando o nome da coluna
+                                                   para sua descrição. Se fornecido, a descrição
+                                                   será concatenada ao nome da coluna para vetorização.
+                                                   Defaults to None.
+
+        Returns:
+            Dict[str, np.ndarray]: Um dicionário onde a chave é o nome da coluna e o valor é o vetor BERT.
+        """
+        logging.info(f"Vetorizando {len(nomes_colunas)} nomes de colunas com BERT (PT)...")
+        col_vectors = {}
+        for col_name in nomes_colunas:
+            text_to_embed = col_name
+            if descriptions and col_name in descriptions:
+                text_to_embed = f"{col_name}. {descriptions[col_name]}"
+            # Força o uso do modelo Português (lang='pt'), que é o mesmo
+            # usado para vetorizar as tabelas (v_tabelas.npy).
+            col_vectors[col_name] = self._get_bert_embedding(text_to_embed, lang='pt')
+        return col_vectors
 
     def criar_vetor_consulta_ponderado(self, v_candidatos, pesos):
         if len(v_candidatos) != len(pesos):
