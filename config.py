@@ -9,7 +9,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # --- Caminhos dos Ativos (Entrada) ---
 
 # JSON original
-JSON_FILE_PATH = os.path.join(BASE_DIR, "asset", "metadata_advanced_consolidated.json")
+METADATA_ADVANCED_FILE_PATH = os.path.join(BASE_DIR, "asset", "metadata_advanced_consolidated.json")
 
 # Modelo W2V
 # W2V_MODEL_PATH = os.path.join(BASE_DIR, "nilc_model", "cbow_s300.txt")
