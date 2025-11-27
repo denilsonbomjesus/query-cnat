@@ -84,28 +84,47 @@ def rodar_pipeline_features(buscador, loader, query, top_n_tables):
                 )
 
             # 4. Interpretar e exibir resultados
-            if best_solution is None or len(best_solution) == 0:
-                st.warning("O GA não encontrou uma solução.")
+            if best_solution is None or len(selected_indices) == 0: # Alterado para usar selected_indices
+                st.warning("O GA não encontrou uma solução relevante para as colunas desta tabela.")
                 continue
 
             selected_indices = np.where(best_solution == 1)[0]
             selected_columns = [column_names[i] for i in selected_indices]
             
-            st.success(f"Análise concluída! Score de Relevância das Features: **{best_fitness:.4f}**")
+            # --- Exibição detalhada conforme SEGUNDA-ETAPA.md ---
+            st.markdown(f"**Tabela:** `{table_name}`")
+            st.markdown(f"**Schema:** `{table_metadata.get('schema', 'N/A')}`")
+            st.markdown(f"**Row Count:** `{table_metadata.get('row_count', 'N/A'):,}`")
+            st.markdown(f"**Score de Relevância das Features:** `{best_fitness:.4f}`")
+            primary_key = table_metadata.get('primary_key', ['NÃO ENCONTRADA'])
+            st.markdown(f"**Chave Primária:** `{', '.join(primary_key)}`")
+
+            # Gerar Justificativa (exemplo simplificado)
+            justificativa = (
+                f"Score {best_fitness:.4f} devido à alta similaridade semântica com a consulta "
+                f"e boa qualidade das colunas selecionadas. "
+                f"As colunas {', '.join(selected_columns[:3])}{'...' if len(selected_columns) > 3 else ''} "
+                f"contribuem significativamente para a relevância."
+            )
+            st.markdown(f"**Justificativa:** {justificativa}")
             
             if selected_columns:
-                st.write("**Colunas Contribuintes para o Score:**")
+                st.markdown("**Colunas Contribuintes para o Score:**")
                 # Usar um DataFrame para melhor visualização
                 df_cols = pd.DataFrame({'Coluna Selecionada': selected_columns})
                 st.dataframe(df_cols, use_container_width=True)
             else:
-                st.write("Nenhuma coluna foi considerada relevante o suficiente pelo AG.")
+                st.warning("Nenhuma coluna foi considerada relevante o suficiente pelo AG.")
 
             # Guarda os resultados para possível uso futuro
             results.append({
                 "table_name": table_name,
                 "feature_relevance_score": best_fitness,
-                "selected_columns": selected_columns
+                "selected_columns": selected_columns,
+                "schema": table_metadata.get('schema', 'N/A'),
+                "row_count": table_metadata.get('row_count', 'N/A'),
+                "primary_key": primary_key,
+                "justificativa": justificativa
             })
     return results
 
