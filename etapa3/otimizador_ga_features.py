@@ -63,9 +63,9 @@ class GAFeatureSelector:
         self.n_cpus = min(os.cpu_count() or 1, 4)
 
         # Pesos da fitness function
-        self.w_semantic = 0.5
-        self.w_quality = 0.3
-        self.w_complexity = 0.2
+        self.w_semantic = 0.7
+        self.w_quality = 0.2
+        self.w_complexity = 0.1
 
     def fitness_function(self, ga_instance, solution, solution_idx):
         """

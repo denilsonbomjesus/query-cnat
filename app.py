@@ -84,11 +84,15 @@ def rodar_pipeline_features(buscador, loader, query, top_n_tables):
                 )
 
             # 4. Interpretar e exibir resultados
-            if best_solution is None or len(selected_indices) == 0: # Alterado para usar selected_indices
-                st.warning("O GA não encontrou uma solução relevante para as colunas desta tabela.")
+            if best_solution is None:
+                st.warning("O GA não retornou uma solução.")
                 continue
 
             selected_indices = np.where(best_solution == 1)[0]
+
+            if len(selected_indices) == 0:
+                st.warning("O GA não selecionou nenhuma coluna como relevante.")
+                continue
             selected_columns = [column_names[i] for i in selected_indices]
             
             # --- Exibição detalhada conforme SEGUNDA-ETAPA.md ---
