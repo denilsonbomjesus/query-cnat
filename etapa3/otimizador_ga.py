@@ -25,11 +25,10 @@ from etapa2.busca_semantica import BuscadorSemantico, normalize_text
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class GAOptimizer:
-    def __init__(self, buscador: BuscadorSemantico, v_candidatos, tabela_embeddings, tabela_nomes, k_top=20):
+    def __init__(self, buscador: BuscadorSemantico, v_candidatos, target_vectors, k_top=20):
         self.buscador = buscador
         self.v_candidatos = v_candidatos
-        self.v_tabelas = tabela_embeddings
-        self.tabela_nomes = tabela_nomes
+        self.target_vectors = target_vectors
         self.k_top = k_top
         self.n_dim = len(v_candidatos)
 
@@ -62,7 +61,7 @@ class GAOptimizer:
         self.persistence_dir = os.path.join("modelos", "ga_pesos")
         os.makedirs(self.persistence_dir, exist_ok=True)
 
-        logging.info(f"GAOptimizer inicializado com {self.n_dim} candidatos e {len(tabela_nomes)} tabelas")
+        logging.info(f"GAOptimizer inicializado com {self.n_dim} candidatos e {len(target_vectors)} vetores alvo")
 
     def _prepare_candidate_matrix(self):
         X = np.vstack(self.v_candidatos)
@@ -85,11 +84,11 @@ class GAOptimizer:
         top_k_scores = [score for _, score in ranking[: self.k_top]]
         return float(np.sum(top_k_scores)), v_query
 
-    def _compute_table_alignment(self, v_query):
-        """Similaridade média com as tabelas reais."""
+    def _compute_target_alignment(self, v_query):
+        """Similaridade média com os vetores alvo (agora colunas)."""
         vq_norm = v_query / (np.linalg.norm(v_query) + 1e-12)
-        vt_norm = self.v_tabelas / (np.linalg.norm(self.v_tabelas, axis=1, keepdims=True) + 1e-12)
-        cos = np.dot(vt_norm, vq_norm)
+        # O self.target_vectors (v_colunas) já deve vir normalizado do buscador
+        cos = np.dot(self.target_vectors, vq_norm)
         return float(np.mean(sorted(cos, reverse=True)[:20]))  # top 20 médias
 
     def _compute_bert_context_metric(self, weights):
@@ -115,7 +114,7 @@ class GAOptimizer:
         sum_topk, v_query = self._compute_sum_topk(sol)
         penalty = self._diversity_penalty(sol)
         bert_metric = self._compute_bert_context_metric(sol)
-        table_align = self._compute_table_alignment(v_query)
+        target_align = self._compute_target_alignment(v_query)
 
         # --- LÓGICA DE BÔNUS DA QUERY CORRIGIDA ---
         # Não modificamos 'sol'. Em vez disso, damos um bônus de fitness
@@ -143,7 +142,7 @@ class GAOptimizer:
         fitness = (
             self.alpha_topk * sum_topk
             + self.gamma_bert * bert_metric
-            + self.delta_table * table_align
+            + self.delta_table * target_align
             + query_gene_bonus # <--- BÔNUS
             - self.beta_diversity * penalty
         )
@@ -193,6 +192,6 @@ class GAOptimizer:
         return best_sol
 
 
-def rodar_otimizacao_ga(buscador, v_candidatos, tabela_embeddings, tabela_nomes):
-    optimizer = GAOptimizer(buscador, v_candidatos, tabela_embeddings, tabela_nomes, k_top=config.K_TOP_FITNESS)
+def rodar_otimizacao_ga(buscador, v_candidatos, target_vectors):
+    optimizer = GAOptimizer(buscador, v_candidatos, target_vectors, k_top=config.K_TOP_FITNESS)
     return optimizer.run()

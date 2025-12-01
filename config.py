@@ -24,6 +24,10 @@ ACTIVE_W2V_MODEL = 'biowordvec'
 V_TABELAS_PATH = os.path.join(BASE_DIR, "v_tabelas.npy")
 INDEX_PATH = os.path.join(BASE_DIR, "tabelas_index.json")
 
+# --- Novos caminhos para vetorização por COLUNA ---
+V_COLUNAS_PATH = os.path.join(BASE_DIR, "v_colunas.npy")
+COLUNAS_INDEX_PATH = os.path.join(BASE_DIR, "colunas_index.json")
+
 # --- Configurações dos Modelos ---
 # BERT_MODEL_NAME = 'neuralmind/bert-base-portuguese-cased'
 BERT_MODEL_NAME = 'pucpr/biobertpt-all'

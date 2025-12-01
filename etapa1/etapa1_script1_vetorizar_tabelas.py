@@ -1,4 +1,5 @@
 # etapa1/etapa1_script1_vetorizar_tabelas.py
+# NOVA VERSÃO: Vetorização por COLUNA
 
 import json
 import numpy as np
@@ -14,7 +15,8 @@ import unicodedata
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
-import config  # Agora podemos importar o config.py da raiz
+# Usaremos o alias 'cfg' para evitar conflito com 'config' de outros módulos
+import config as cfg
 # ------------------------------------------------
 
 # Configura o logging
@@ -22,135 +24,91 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 
 def get_bert_mean_pooling_embedding(model_output, attention_mask):
     """Aplica Mean Pooling para obter um embedding de nível de sentença."""
-    # model_output[0] é o last_hidden_state
     last_hidden_state = model_output.last_hidden_state
-    
-    # Expande a máscara de atenção para as dimensões do embedding
     input_mask_expanded = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
-    
-    # Soma os embeddings (anulando os de padding)
     sum_embeddings = torch.sum(last_hidden_state * input_mask_expanded, 1)
-    
-    # Soma a máscara (para obter o número de tokens reais)
     sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
-    
-    # Retorna a média
     mean_embedding = sum_embeddings / sum_mask
-    return mean_embedding.cpu().numpy()[0] # [0] para extrair do batch
-# -------------------------------------------
+    return mean_embedding.cpu().numpy()[0]
 
 def check_file_exists(filepath):
     """Verifica se o arquivo JSON de entrada existe."""
     if not os.path.exists(filepath):
         logging.error(f"Erro: Arquivo não encontrado em '{filepath}'")
-        logging.error("Por favor, verifique o caminho em config.py (JSON_FILE_PATH).")
         return False
     return True
 
 def normalize_text(text):
     """Remove acentos, converte para minúsculas e remove espaços extras."""
     if not text: return ""
-    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("utf-8")
-    return " ".join(text.lower().split())
+    try:
+        # Tenta a normalização padrão
+        text = str(text)
+        text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("utf-8")
+        return " ".join(text.lower().split())
+    except Exception:
+        # Se falhar, retorna o texto original normalizado de forma simples
+        return " ".join(str(text).lower().split())
 
-# --- FUNÇÃO MODIFICADA ---
-def expandir_nome_tabela(nome):
-    """
-    Expande nomes técnicos de tabelas (ex: 'ta_exame_colesterol_total')
-    em palavras-chave (ex: 'associacao exame colesterol total').
-    """
-    nome = nome.lower().strip().replace("_", " ")
-    
-    # Apenas troca prefixos por palavras-chave, sem adicionar "tabela de"
-    if nome.startswith("tb "):
-        nome = nome.replace("tb ", "tabela ", 1)
-    elif nome.startswith("ta "):
-        nome = nome.replace("ta ", "associacao ", 1)
-    elif nome.startswith("tl "):
-        nome = nome.replace("tl ", "lista ", 1)
-    elif nome.startswith("rl "):
-        nome = nome.replace("rl ", "relacao ", 1)
-    elif nome.startswith("dim "):
-        nome = nome.replace("dim ", "dimensao ", 1)
-    
-    # REMOVEMOS AS HEURÍSTICAS QUE ADICIONAVAM POLUIÇÃO
-    # (ex: "laboratoriais e biomédicos", "relacionados a pacientes...")
-    
-    return nome
 
-# --- FUNÇÃO MODIFICADA ---
-def create_table_document(table_metadata):
+def create_column_document(table_name, column_metadata):
     """
-    Cria um "documento" de palavras-chave puras para a tabela,
-    removendo stop-words e prefixos de coluna.
+    Cria um "documento" textual para uma única coluna, incluindo o nome da tabela,
+    nome da coluna, descrição e uma amostra de seus valores.
     """
-    table_name = table_metadata.get("table_name", "")
-    if not table_name:
+    column_name = column_metadata.get("name", "")
+    if not column_name:
         return ""
-    
-    table_name_keywords = set(expandir_nome_tabela(table_name).split())
-    
-    column_keywords = set()
-    if "columns" in table_metadata:
-        column_names_raw = [c.get("name", "") for c in table_metadata["columns"] if c.get("name")]
-        for name in column_names_raw:
-            name = name.lower().strip().replace("_", " ")
-            
-            # Remove prefixos comuns de colunas que não têm semântica
-            if name.startswith("co "): name = name[3:]
-            if name.startswith("id "): name = name[3:]
-            if name.startswith("cd "): name = name[3:]
-            if name.startswith("dt "): name = name[3:]
-            if name.startswith("st "): name = name[3:]
-            if name.startswith("tp "): name = name[3:]
-            if name.startswith("ds "): name = name[3:]
-            if name.startswith("nr "): name = name[3:]
-            
-            # Adiciona as palavras-chave da coluna
-            column_keywords.update(name.split())
 
-    # Une todas as palavras-chave (nome da tabela + colunas)
-    all_keywords = table_name_keywords.union(column_keywords)
-    
-    # Filtra stop words em português para não poluir o vetor mean-pooling
-    stop_words_pt = set([
-        "de", "a", "o", "que", "e", "do", "da", "em", "um", "para", "com", "nao", "uma", 
-        "os", "no", "se", "na", "por", "mais", "as", "dos", "como", "mas", "foi", "ao", 
-        "ele", "das", "tem", "sem", "nos", "ja", "eu", "tambem", "so", "pelo", "pela", 
-        "ate", "isso", "ela", "entre", "era", "depois", "nem", "mesmo", "outro", "ha", 
-        "sua", "ou", "ser", "quando", "muito", "qm", "voce", "ainda", "sao", "quem",
-        "contem", "colunas", "laboratoriais", "biomedicos", "classificacao", 
-        "internacional", "doencas", "relacionados", "pacientes", "cidadaos", "tabela"
-    ])
+    # 1. Nomes da tabela e coluna
+    doc_parts = [normalize_text(table_name), normalize_text(column_name)]
 
-    final_keywords = [k for k in all_keywords if k not in stop_words_pt and len(k) > 2]
-    
-    document = " ".join(final_keywords)
-    
-    # Chama a normalização aqui para garantir
-    document = normalize_text(document)
+    # 2. Descrição (se houver, mas por enquanto não temos no JSON)
+    # description = column_metadata.get("description", "")
+    # if description:
+    #     doc_parts.append(normalize_text(description))
+
+    # 3. Amostra de dados (o mais importante para a semântica)
+    stats = column_metadata.get("stats", {})
+    sample_values = []
+    if "frequent_values" in stats and stats["frequent_values"]:
+        # Prioriza valores frequentes, que são mais representativos
+        for item in stats["frequent_values"][:10]: # Limita a 10 para não poluir
+            sample_values.append(str(item.get("value", "")))
+    elif "sample_values" in stats and stats["sample_values"]:
+        # Usa valores de amostra como fallback
+        sample_values = [str(v) for v in stats["sample_values"][:10]] # Limita a 10
+
+    if sample_values:
+        # Adiciona um prefixo para dar contexto ao modelo de que são valores da coluna
+        doc_parts.append("valores da coluna:")
+        normalized_samples = [normalize_text(val) for val in sample_values if val]
+        doc_parts.extend(list(set(normalized_samples))) # Usa set para evitar repetições
+
+    # Junta tudo em um único documento
+    document = " ".join(doc_parts)
     return document.strip()
+
 
 def get_bert_embedding(text, model, tokenizer, device):
     """Gera o embedding do texto usando o modelo BERT (mean pooling)."""
-    inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=512, padding=True)
+    inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=512, padding="max_length")
     inputs = {key: val.to(device) for key, val in inputs.items()}
-    
+
     with torch.no_grad():
         outputs = model(**inputs)
-    
-    # Usa a nova função de mean pooling
+
     mean_embedding = get_bert_mean_pooling_embedding(outputs, inputs['attention_mask'])
     return mean_embedding
 
 def main():
-    """Função principal para executar o pré-processamento."""
-    if not check_file_exists(config.JSON_FILE_PATH):
+    """Função principal para vetorizar COLUNAS."""
+    if not check_file_exists(cfg.METADATA_ADVANCED_FILE_PATH):
         return
 
-    logging.info(f"Carregando metadados de {config.JSON_FILE_PATH}...")
+    logging.info(f"Carregando metadados de {cfg.METADATA_ADVANCED_FILE_PATH}...")
     try:
-        with open(config.JSON_FILE_PATH, "r", encoding="utf-8") as f:
+        with open(cfg.METADATA_ADVANCED_FILE_PATH, "r", encoding="utf-8") as f:
             metadata = json.load(f)
     except Exception as e:
         logging.error(f"Falha ao carregar o JSON: {e}")
@@ -159,44 +117,57 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Usando dispositivo: {device}")
 
-    logging.info(f"Carregando modelo BERT: {config.BERT_MODEL_NAME}...")
-    tokenizer = BertTokenizer.from_pretrained(config.BERT_MODEL_NAME)
-    model = BertModel.from_pretrained(config.BERT_MODEL_NAME).to(device)
+    logging.info(f"Carregando modelo BERT: {cfg.BERT_MODEL_NAME}...")
+    tokenizer = BertTokenizer.from_pretrained(cfg.BERT_MODEL_NAME)
+    model = BertModel.from_pretrained(cfg.BERT_MODEL_NAME).to(device)
     model.eval()
 
-    all_vectors = []
-    table_index_map = {}
+    all_column_vectors = []
+    column_index = []
+    idx_counter = 0
 
-    logging.info("Iniciando vetorização das tabelas...")
-    for i, table in enumerate(tqdm(metadata, desc="Vetorizando Tabelas")):
+    logging.info("Iniciando vetorização por COLUNA...")
+    for table in tqdm(metadata, desc="Processando Tabelas"):
         table_name = table.get("table_name")
-        if not table_name:
+        if not table_name or "columns" not in table:
             continue
 
-        # Chama a nova função create_table_document "limpa"
-        document = create_table_document(table)
-        
-        if not document:
-            # Pula tabelas que não geraram palavras-chave (ex: tabelas só de ID)
-            logging.warning(f"Nenhum documento de palavra-chave gerado para {table_name}, pulando.")
-            continue
+        for column in table["columns"]:
+            column_name = column.get("name")
+            if not column_name:
+                continue
 
-        vector = get_bert_embedding(document, model, tokenizer, device)
-        all_vectors.append(vector)
-        table_index_map[table_name] = i
+            # Cria o documento para a coluna atual
+            document = create_column_document(table_name, column)
 
-    v_tabelas = np.array(all_vectors)
-    logging.info(f"Vetorização concluída. Shape: {v_tabelas.shape}")
+            if not document:
+                logging.warning(f"Nenhum documento gerado para {table_name}.{column_name}, pulando.")
+                continue
+
+            # Gera o vetor
+            vector = get_bert_embedding(document, model, tokenizer, device)
+            all_column_vectors.append(vector)
+
+            # Adiciona a entrada no índice
+            column_index.append({
+                "index": idx_counter,
+                "table_name": table_name,
+                "column_name": column_name
+            })
+            idx_counter += 1
+
+    v_colunas = np.array(all_column_vectors)
+    logging.info(f"Vetorização de colunas concluída. Shape: {v_colunas.shape}")
 
     try:
-        logging.info(f"Salvando vetores em {config.V_TABELAS_PATH}...")
-        np.save(config.V_TABELAS_PATH, v_tabelas)
+        logging.info(f"Salvando vetores de colunas em {cfg.V_COLUNAS_PATH}...")
+        np.save(cfg.V_COLUNAS_PATH, v_colunas)
 
-        logging.info(f"Salvando índice de tabelas em {config.INDEX_PATH}...")
-        with open(config.INDEX_PATH, "w", encoding="utf-8") as f:
-            json.dump(table_index_map, f, indent=2)
+        logging.info(f"Salvando índice de colunas em {cfg.COLUNAS_INDEX_PATH}...")
+        with open(cfg.COLUNAS_INDEX_PATH, "w", encoding="utf-8") as f:
+            json.dump(column_index, f, indent=2)
 
-        logging.info("--- ETAPA 1 (SCRIPT 1) CONCLUÍDA ---")
+        logging.info("--- ETAPA 1 (SCRIPT 1 - VETORIZAÇÃO POR COLUNA) CONCLUÍDA ---")
 
     except Exception as e:
         logging.error(f"Falha ao salvar os arquivos de saída: {e}")

@@ -152,8 +152,7 @@ def rodar_pipeline_busca(buscador, query_usuario, n_termos=10):
         w_otimizado = rodar_otimizacao_ga(
             buscador,
             v_candidatos,
-            buscador.vetores_tabelas,
-            buscador.nomes_tabelas
+            buscador.v_colunas # CORRIGIDO: Passa os vetores de COLUNAS como alvo para o GA
         )
 
     st.write("AG concluído! Pesos otimizados encontrados.")

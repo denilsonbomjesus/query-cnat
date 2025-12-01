@@ -50,10 +50,10 @@ class BuscadorSemantico:
         # W2V (BioWordVec reduzido já convertido .kv)
         self.w2v_model = None
 
-        # Tabelas / índices
-        self.v_tabelas = None
-        self.tabelas_index_map = None  # Mapa: nome -> id
-        self.index_tabelas_map = None  # Mapa: id -> nome
+        # --- ATRIBUTOS DA NOVA BUSCA POR COLUNA ---
+        self.v_colunas = None         # Vetores de todas as colunas
+        self.colunas_index = None     # Lista de metadados [{index, table_name, column_name}]
+        # -------------------------------------------
 
         # Cache local de embeddings BERT para acelerar múltiplas chamadas
         self._bert_embedding_cache = {}
@@ -69,7 +69,7 @@ class BuscadorSemantico:
         # Carregamentos
         self._load_bert()
         self._load_w2v()
-        self._load_table_vectors()
+        self._load_column_vectors() # NOVA FUNÇÃO
 
         self.tradutor = TradutorPTEN()
 
@@ -176,27 +176,33 @@ class BuscadorSemantico:
             logging.error(f"❌ Falha ao carregar o modelo W2V: {e}")
             raise
 
-    # ---------------- Table vectors ----------------
-    def _load_table_vectors(self):
-        """Carrega os vetores da tabela e o índice do config."""
+    # ---------------- NOVO - Carregamento por COLUNA ----------------
+    def _load_column_vectors(self):
+        """Carrega os vetores de COLUNA e o índice do config."""
         try:
-            logging.info(f"Carregando vetores das tabelas de {config.V_TABELAS_PATH}...")
-            self.v_tabelas = np.load(config.V_TABELAS_PATH)
-            self.v_tabelas = normalize(self.v_tabelas, norm='l2', axis=1)
+            logging.info(f"Carregando vetores de colunas de {config.V_COLUNAS_PATH}...")
+            self.v_colunas = np.load(config.V_COLUNAS_PATH)
+            # Normaliza os vetores para que a similaridade de cosseno seja um simples produto escalar
+            self.v_colunas = normalize(self.v_colunas, norm='l2', axis=1)
 
-            logging.info(f"Carregando índice de {config.INDEX_PATH}...")
-            with open(config.INDEX_PATH, 'r', encoding='utf-8') as f:
-                self.tabelas_index_map = json.load(f)
+            logging.info(f"Carregando índice de colunas de {config.COLUNAS_INDEX_PATH}...")
+            with open(config.COLUNAS_INDEX_PATH, 'r', encoding='utf-8') as f:
+                self.colunas_index = json.load(f)
 
-            self.index_tabelas_map = {v: k for k, v in self.tabelas_index_map.items()}
+            # Validar consistência
+            if self.v_colunas.shape[0] != len(self.colunas_index):
+                raise ValueError(
+                    f"Inconsistência: {self.v_colunas.shape[0]} vetores mas "
+                    f"{len(self.colunas_index)} entradas no índice."
+                )
 
-            self.vetores_tabelas = self.v_tabelas  # alias com nome intuitivo
-            # cria lista de nomes ordenada pelo índice (0..N-1)
-            self.nomes_tabelas = [self.index_tabelas_map[i] for i in range(self.v_tabelas.shape[0])]
-
-            logging.info(f"Vetores das tabelas (shape: {self.v_tabelas.shape}) e índices carregados.")
+            logging.info(f"Vetores de colunas (shape: {self.v_colunas.shape}) e índice carregados.")
+        except FileNotFoundError as e:
+            logging.error(f"Erro: Arquivo não encontrado: {e.filename}.")
+            logging.error("Você executou o script 'etapa1/etapa1_script1_vetorizar_tabelas.py' primeiro?")
+            raise
         except Exception as e:
-            logging.error(f"Falha ao carregar os arquivos das tabelas: {e}")
+            logging.error(f"Falha ao carregar os arquivos de vetores/índice de colunas: {e}")
             raise
 
     # ---------------- Helpers para expansão ----------------
@@ -451,13 +457,29 @@ class BuscadorSemantico:
         return v_query_final.flatten()
 
     def ranking_por_similaridade(self, v_query_final):
-        if self.v_tabelas is None:
-            raise RuntimeError("Vetores das tabelas não foram carregados.")
-        scores = np.dot(self.v_tabelas, v_query_final)
-        indices_ordenados = np.argsort(scores)[::-1]
-        ranking = []
-        for idx in indices_ordenados:
-            table_name = self.index_tabelas_map.get(idx, f"ID_{idx}_DESCONHECIDO")
-            score = scores[idx]
-            ranking.append((table_name, float(score)))
+        """
+        NOVA VERSÃO: Calcula a similaridade com COLUNAS e agrega o score por TABELA.
+        """
+        if self.v_colunas is None:
+            raise RuntimeError("Vetores de colunas não foram carregados. Execute a vetorização primeiro.")
+
+        # 1. Calcula a similaridade da consulta com todos os vetores de colunas
+        scores_colunas = np.dot(self.v_colunas, v_query_final)
+
+        # 2. Agrega os scores por tabela usando 'max'
+        scores_tabela = {}
+        for i, score in enumerate(scores_colunas):
+            meta_coluna = self.colunas_index[i]
+            table_name = meta_coluna["table_name"]
+            
+            # Atualiza o score da tabela com o score máximo de suas colunas
+            if table_name not in scores_tabela:
+                scores_tabela[table_name] = -1.0 # Inicia com score baixo
+            
+            if score > scores_tabela[table_name]:
+                scores_tabela[table_name] = float(score)
+
+        # 3. Ordena as tabelas pelo score agregado
+        ranking = sorted(scores_tabela.items(), key=lambda item: item[1], reverse=True)
+        
         return ranking
