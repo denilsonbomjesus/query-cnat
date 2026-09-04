@@ -131,6 +131,12 @@ def rodar(cmd, descricao=""):
         print(f"    Comando: {' '.join(cmd)}")
     try:
         subprocess.run(cmd, cwd=ROOT, check=True)
+    except KeyboardInterrupt:
+        # Ctrl+C no console atinge o subprocesso E o setup.py (Windows e
+        # Unix). Sem este tratamento, o usuário vê um traceback enorme.
+        print(f"\n{EMOJIS['aviso']} Setup interrompido pelo usuário (Ctrl+C).")
+        print("    Nenhum arquivo foi corrompido — basta rodar novamente: python setup.py")
+        sys.exit(130)
     except subprocess.CalledProcessError as e:
         print(f"\n{EMOJIS['erro']} Falha ao executar: {' '.join(cmd)}")
         print(f"    Erro: {e}")
@@ -171,9 +177,11 @@ def instalar_requisitos():
         print(f"{EMOJIS['aviso']} requirements.txt não encontrado — pulando instalação.")
         return
     print(f"{EMOJIS['info']} Instalando dependências do {REQUIREMENTS} ...")
-    rodar([caminho_venv_python(), "-m", "pip", "install", "--upgrade", "pip", "-q"],
-          "Atualizando pip")
-    rodar([caminho_venv_python(), "-m", "pip", "install", "-r", REQUIREMENTS],
+    # Sem passo de '--upgrade pip': o pip do venv recém-criado já é recente
+    # o suficiente, e a atualização silenciosa (-q) parecia travada e era
+    # interrompida (erro 'Operation cancelled by user' no Windows).
+    rodar([caminho_venv_python(), "-m", "pip", "install", "-r", REQUIREMENTS,
+           "--no-input", "--disable-pip-version-check"],
           "Instalando dependências (pode levar vários minutos)")
 
 
@@ -367,4 +375,11 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        # Rede de segurança para interrupções fora de rodar() (ex.: durante
+        # a criação do venv): mensagem limpa em vez de traceback.
+        print(f"\n{EMOJIS['aviso']} Setup interrompido pelo usuário (Ctrl+C).")
+        print("    Nenhum arquivo foi corrompido — basta rodar novamente: python setup.py")
+        sys.exit(130)
