@@ -9,9 +9,6 @@
 __pycache__/
 *.pyc
 
-# template de regras de commit (uso local, não versionar)
-bugs/REGRAS-DE-COMMIT.md
-
 # arquivos de configuração
 SEGUNDA-ETAPA.md
 PLANO-ETAPA-2.md
