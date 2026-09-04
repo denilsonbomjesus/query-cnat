@@ -23,7 +23,12 @@ LIMIT = 500000  # Número máximo de palavras a carregar
 # ================================================================
 # FUNÇÃO PRINCIPAL
 # ================================================================
-def compactar_biowordvec():
+def compactar_biowordvec(skip_test=False):
+    """Compacta o modelo BioWordVec.
+
+    Args:
+        skip_test: se True, pula o teste interativo (útil para automação).
+    """
     if not os.path.exists(BIOWORDVEC_PATH):
         logging.error(f"❌ Arquivo de modelo não encontrado: {BIOWORDVEC_PATH}")
         logging.error("Certifique-se de ter executado o script3 antes deste.")
@@ -44,15 +49,16 @@ def compactar_biowordvec():
         modelo.save(OUTPUT_MODEL_PATH)
         logging.info("✅ Modelo reduzido salvo com sucesso!")
 
-        # Pequeno teste opcional
-        termo_teste = input("\nDigite um termo médico em inglês para testar: ").strip()
-        if termo_teste in modelo.key_to_index:
-            similares = modelo.most_similar(termo_teste, topn=10)
-            print(f"\n🔍 Termos semelhantes a '{termo_teste}':")
-            for palavra, score in similares:
-                print(f"  - {palavra} ({score:.4f})")
-        else:
-            print(f"⚠️ O termo '{termo_teste}' não foi encontrado no vocabulário.")
+        # Pequeno teste opcional (apenas interativo)
+        if not skip_test:
+            termo_teste = input("\nDigite um termo médico em inglês para testar: ").strip()
+            if termo_teste in modelo.key_to_index:
+                similares = modelo.most_similar(termo_teste, topn=10)
+                print(f"\n🔍 Termos semelhantes a '{termo_teste}':")
+                for palavra, score in similares:
+                    print(f"  - {palavra} ({score:.4f})")
+            else:
+                print(f"⚠️ O termo '{termo_teste}' não foi encontrado no vocabulário.")
 
     except Exception as e:
         logging.error(f"❌ Erro ao carregar ou salvar modelo: {e}")
@@ -61,6 +67,8 @@ def compactar_biowordvec():
 # EXECUÇÃO PRINCIPAL
 # ================================================================
 if __name__ == "__main__":
+    import sys
+    skip_test = "--skip-test" in sys.argv
     logging.info("=== INICIANDO ETAPA 1 (SCRIPT 4): COMPACTAR BIOWORDVEC ===")
-    compactar_biowordvec()
+    compactar_biowordvec(skip_test=skip_test)
     logging.info("--- ETAPA 1 (SCRIPT 4) CONCLUÍDA ---")

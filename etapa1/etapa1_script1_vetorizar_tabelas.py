@@ -145,10 +145,10 @@ def get_bert_embedding(text, model, tokenizer, device):
 
 def main():
     """Função principal para executar o pré-processamento."""
-    if not check_file_exists(config.JSON_FILE_PATH):
+    if not check_file_exists(config.METADATA_ADVANCED_FILE_PATH):
         return
 
-    logging.info(f"Carregando metadados de {config.JSON_FILE_PATH}...")
+    logging.info(f"Carregando metadados de {config.METADATA_ADVANCED_FILE_PATH}...")
     try:
         with open(config.JSON_FILE_PATH, "r", encoding="utf-8") as f:
             metadata = json.load(f)
