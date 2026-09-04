@@ -275,13 +275,11 @@ class BuscadorSemantico:
 
         # ---------------- Tradução PT → EN (somente se BioWordVec ativo) ----------------
         query_original = query.strip().lower()
-        traduzido_para_en = False
         if config.ACTIVE_W2V_MODEL.lower() == 'biowordvec':
             query_en = self.tradutor.pt_para_en(query_original)
             if query_en and query_en != query_original:
                 logging.info(f"🌐 Traduzindo consulta (PT→EN): '{query_original}' → '{query_en}'")
                 query = query_en.lower()
-                traduzido_para_en = True
             else:
                 query = query_original
         else:
@@ -394,8 +392,13 @@ class BuscadorSemantico:
         resultado_final.extend(finais)
         logging.info(f"Expandido '{query}' para {len(resultado_final)} termos (incluindo query).")
 
-        # ---------------- Tradução EN → PT (somente se necessário) ----------------
-        if traduzido_para_en:
+        # ---------------- Tradução EN → PT (sempre, pois o W2V é inglês) ----------------
+        # O BioWordVec expande SEMPRE em inglês, mas o ranking final usa BERT PT
+        # e vetores de tabelas em PT — os termos precisam voltar ao português.
+        # Não depende de 'traduzido_para_en': mesmo se a consulta já estiver em
+        # inglês (ex.: 'pre-eclampsia') ou se a tradução PT→EN devolver o mesmo
+        # texto, os candidatos do W2V são ingleses e devem ser exibidos/usados em PT.
+        if config.ACTIVE_W2V_MODEL.lower() == 'biowordvec':
             logging.info("🌐 Traduzindo termos expandidos EN→PT para exibição e uso no pipeline...")
             traduzidos = self.tradutor.traduz_lista([t for t, s in resultado_final], direcao="en2pt")
             resultado_final = list(zip(traduzidos, [s for t, s in resultado_final]))
