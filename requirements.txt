@@ -1,4 +1,8 @@
 # requirements.txt
+# torchvision NÃO é necessário: o pipeline é somente texto (BERT/BioWordVec).
+# O transformers recente importa torchvision em módulos de visão (não usados),
+# por isso inicie o app com `streamlit run app.py --server.fileWatcherType none`
+# para evitar os avisos do watcher (ver README -> FAQ).
 torch
 transformers
 numpy

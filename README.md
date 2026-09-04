@@ -165,7 +165,7 @@ python etapa1/etapa1_script1_vetorizar_tabelas.py
 Com o ambiente preparado, inicie a interface web (Streamlit):
 
 ```bash
-streamlit run app.py
+streamlit run app.py --server.fileWatcherType none
 ```
 
 ou, usando o `setup.py`:
@@ -173,6 +173,17 @@ ou, usando o `setup.py`:
 ```bash
 python setup.py --run
 ```
+
+> **Por que `--server.fileWatcherType none`?** O watcher padrão do Streamlit
+> (hot-reload) varre os módulos importados em busca de mudanças. O `transformers`
+> recente tem dezenas de módulos de visão (não usados por este sistema, que é
+> apenas texto) que importam `torchvision` no topo — e o `torchvision` **não**
+> está instalado de propósito. O resultado é um dilúvio de avisos do tipo
+> `ModuleNotFoundError: No module named 'torchvision'` no terminal. Esses avisos
+> são **inofensivos** (o app continua funcionando), mas poluem o log; desligar o
+> watcher elimina todo o ruído e é a configuração recomendada para produção.
+> Se quiser hot-reload durante o desenvolvimento, pode rodar sem a flag — os
+> avisos do `torchvision` aparecem, mas nada quebra.
 
 Acesse no navegador o endereço exibido no terminal (padrão: `http://localhost:8501`).
 
@@ -223,7 +234,7 @@ query-cnat/
 ├── app.py                              # Interface Streamlit (ponto de entrada)
 ├── config.py                           # Configurações centrais (caminhos, modelos, GA)
 ├── setup.py                            # Setup offline completo (venv, modelos, vetores)
-├── tradutor.py                         # Tradução PT↔EN com cache, retry e fallback
+├── tradutor.py                         # Tradução PT↔EN: Google + MyMemory (fallback), cache e retry
 ├── requirements.txt                    # Dependências Python
 ├── README.md                           # Este documento
 ├── asset/                              # Ativos de entrada/saída (versionados)
@@ -278,7 +289,10 @@ Em Debian/Ubuntu, o Python do sistema pode não ter o módulo `venv`: instale co
 São ~13 GB da NCBI — é esperado. O `setup.py` pula se o arquivo já existir. Confira o espaço em disco antes.
 
 **"Erro de tradução / rede no app."**
-O `tradutor.py` tem retry (3 tentativas) e fallback: se a tradução falhar, a consulta original é usada. A expansão semântica funciona melhor com internet.
+O `tradutor.py` usa uma **cadeia de provedores**: primeiro o Google Translate; se falhar (ex.: `No translation was found using the current translator` — rate-limit/captcha do Google), tenta o **MyMemoryTranslator** (gratuito, sem chave) e só então, esgotados os dois, usa a consulta original como fallback. Cada provedor tem retry de 3 tentativas com backoff, e o cache guarda apenas traduções bem-sucedidas. A expansão semântica funciona melhor com internet, mas degrada bem menos quando um provedor específico falha.
+
+**"Terminal cheio de `ModuleNotFoundError: No module named 'torchvision'` ao iniciar o app."**
+Inofensivo e esperado: é o watcher do Streamlit (hot-reload) sondando módulos de visão do `transformers` que o sistema não usa (o `torchvision` não está instalado de propósito). Rode com `streamlit run app.py --server.fileWatcherType none` (ou `python setup.py --run`) para silenciar — é o comando recomendado neste README.
 
 **"O app está lento na primeira consulta."**
 A primeira execução carrega os modelos BERT e o BioWordVec na memória (pode levar alguns minutos). Depois, ficam em cache.
@@ -295,5 +309,5 @@ Por padrão **não são persistidos** (evita acúmulo de arquivos). Para persist
 
 - **GPU opcional**: o código detecta CUDA automaticamente; o `pip install torch` padrão instala a versão CPU. Para GPU, instale a build CUDA do PyTorch.
 - **Cache HuggingFace**: os modelos BERT ficam em `~/.cache/huggingface`. Em servidores, defina `HF_HOME` para um caminho persistente compartilhado.
-- **Internet em runtime**: a tradução PT→EN usa Google Translate; sem internet, o sistema degrada com fallback para o texto original (a qualidade da expansão reduz).
+- **Internet em runtime**: a tradução PT→EN usa Google Translate com fallback para MyMemory; sem internet, o sistema degrada com fallback para o texto original (a qualidade da expansão reduz).
 - **Branch de desenvolvimento**: o trabalho de reprodutibilidade (timeouts, determinismo, testes) está na branch `reprodutibilidade`.
