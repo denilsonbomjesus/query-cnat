@@ -282,12 +282,16 @@ def instrucoes_finais(run_app=False):
         ativar = "source venv/bin/activate"
         print(f"  Ativar o ambiente:              {ativar}")
 
-    print(f"  Iniciar a interface:            streamlit run app.py")
+    print(f"  Iniciar a interface:            streamlit run app.py --server.fileWatcherType none")
     print(f"  (ou rode:                       python setup.py --run)")
 
     if run_app:
         print(f"\n{EMOJIS['info']} Iniciando o app...")
-        rodar([caminho_venv_python(), "-m", "streamlit", "run", APP],
+        # fileWatcherType=none evita o watcher do Streamlit varrer o transformers
+        # e disparar centenas de warnings de 'torchvision ausente' (módulos de
+        # visão que o sistema não usa). Também desliga o hot-reload em produção.
+        rodar([caminho_venv_python(), "-m", "streamlit", "run", APP,
+               "--server.fileWatcherType", "none"],
               "Iniciando a interface (streamlit run app.py)")
     else:
         print(f"\n{EMOJIS['ok']} Setup concluído! Basta iniciar o app com o comando acima.")
