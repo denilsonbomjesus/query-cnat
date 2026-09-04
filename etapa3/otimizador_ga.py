@@ -47,7 +47,7 @@ class GAOptimizer:
         self.crossover_probability = ga_conf.get("crossover_probability", 0.5)
         self.elitism_ratio = ga_conf.get("elit_ratio", 0.01)
         self.parents_portion = ga_conf.get("parents_portion", 0.3)
-        self.n_cpus = min(os.cpu_count() or 1, 8)
+        self.crossover_type = ga_conf.get("crossover_type", "single_point")
 
         # pesos do fitness
         self.alpha_topk = 1.0
@@ -59,8 +59,17 @@ class GAOptimizer:
         self.best_fitness = None
         self.generation_count = 0
 
+        # Watchdog de timeout (Bug B): inicializados para permitir chamadas
+        # diretas de fitness_function em testes; run() define os valores reais.
+        self._start_time = time.time()
+        self._max_time = 300
+        self._timeout_atingido = False
+
+        # Fitness degradado devolvido quando o tempo estoura (abaixo de qualquer
+        # fitness legítimo, para nunca ser escolhido como melhor solução).
+        self._fitness_degradado = -1e9
+
         self.persistence_dir = os.path.join("modelos", "ga_pesos")
-        os.makedirs(self.persistence_dir, exist_ok=True)
 
         logging.info(f"GAOptimizer inicializado com {self.n_dim} candidatos e {len(tabela_nomes)} tabelas")
 
@@ -108,6 +117,14 @@ class GAOptimizer:
             return 0.0
 
     def fitness_function(self, ga_instance, solution, solution_idx):
+        # Watchdog intra-geração (Bug B): se o tempo total já estourou, devolve
+        # imediatamente um fitness degradado — reduz a janela de stall (ex.: 2,8 h
+        # em uma única geração no B3 N=20) para o custo de UMA avaliação; a
+        # geração termina rápido e o on_generation para o GA em seguida.
+        if (time.time() - self._start_time) > self._max_time:
+            self._timeout_atingido = True
+            return self._fitness_degradado
+
         # Solução (pesos) vinda do GA
         sol = np.clip(np.array(solution, dtype=float), 0.0, 1.0)
 
@@ -155,17 +172,52 @@ class GAOptimizer:
 
         return float(fitness)
 
-    def on_generation(self, ga_instance):
-        self.generation_count += 1
-        gen = self.generation_count
-        decay = np.exp(-3 * (gen / max(1, self.num_generations)))
-        ga_instance.mutation_percent_genes = max(1, int(self.mutation_percent_genes * decay))
-        logging.info(f"[GA] Geração {gen}/{self.num_generations} — best_fitness={self.best_fitness:.6f}")
+    def run(self, max_time_seconds: int = 300, save_weights: bool = False):
+        """
+        Executa o GA com timeout de segurança.
 
-    def run(self):
-        logging.info("--- Iniciando GA ---")
+        Bug B (backport): além do timeout entre gerações, a fitness function
+        também verifica o tempo (watchdog intra-geração), evitando que uma
+        geração única trave o processo por horas.
+
+        Bug J (backport): persistência de pesos agora é opt-in (save_weights),
+        evitando acúmulo de pesos_*.npy a cada execução da UI/teste.
+
+        Args:
+            max_time_seconds: Tempo máximo de execução em segundos (default: 300 = 5 min).
+                             Se o GA não convergir neste tempo, retorna a melhor solução encontrada.
+            save_weights: Se True, persiste a melhor solução em modelos/ga_pesos/.
+        """
+        logging.info(f"--- Iniciando GA (timeout={max_time_seconds}s) ---")
         gene_space = [{'low': 0.0, 'high': 1.0}] * self.n_dim
 
+        # Variável para controlar timeout
+        self._start_time = time.time()
+        self._max_time = max_time_seconds
+        self.best_solution = None
+        self.best_fitness = None
+        self.generation_count = 0
+        self._timeout_atingido = False
+
+        # Callback para verificar timeout a cada geração
+        def on_generation_timeout(ga_instance):
+            self.generation_count += 1
+            gen = self.generation_count
+            elapsed = time.time() - self._start_time
+            
+            # Decay de mutação
+            decay = np.exp(-3 * (gen / max(1, self.num_generations)))
+            ga_instance.mutation_percent_genes = max(1, int(self.mutation_percent_genes * decay))
+            
+            best_fit_str = f"{self.best_fitness:.6f}" if self.best_fitness is not None else "N/A"
+            logging.info(f"[GA] Geração {gen}/{self.num_generations} — best_fitness={best_fit_str} — elapsed={elapsed:.1f}s")
+            
+            # Verificar timeout (entre gerações)
+            if elapsed > self._max_time:
+                logging.warning(f"[GA] TIMEOUT atingido ({elapsed:.1f}s > {self._max_time}s). Parando GA.")
+                self._timeout_atingido = True
+                return "stop"
+        
         ga = pygad.GA(
             num_generations=self.num_generations,
             num_parents_mating=max(2, int(self.sol_per_pop * self.parents_portion)),
@@ -174,25 +226,45 @@ class GAOptimizer:
             num_genes=self.n_dim,
             gene_space=gene_space,
             keep_elitism=int(max(1, np.round(self.elitism_ratio * self.sol_per_pop))),
-            crossover_type="single_point",
+            crossover_type=self.crossover_type,
             crossover_probability=self.crossover_probability,
             mutation_type="random",
             mutation_percent_genes=self.mutation_percent_genes,
-            on_generation=self.on_generation,
-            parallel_processing=self.n_cpus
+            on_generation=on_generation_timeout,
+            parallel_processing=1  # Desabilitado para evitar issues com BioBERT em threads
         )
 
         start = time.time()
         ga.run()
-        logging.info(f"GA concluído em {time.time()-start:.2f}s")
+        elapsed_total = time.time() - start
+        logging.info(f"GA concluído em {elapsed_total:.2f}s ({self.generation_count} gerações)")
 
-        best_sol, best_fit, _ = ga.best_solution()
-        best_sol = np.clip(best_sol, 0.0, 1.0)
+        if self._timeout_atingido:
+            # Timeout interrompeu o GA: usa a melhor solução rastreada pela
+            # fitness function (ga.best_solution() pode estar desatualizado
+            # ou apontar para a população parcialmente avaliada).
+            if self.best_solution is not None:
+                best_sol = np.clip(self.best_solution, 0.0, 1.0)
+            else:
+                logging.warning("[GA] Timeout antes da 1ª geração. Retornando pesos uniformes.")
+                best_sol = np.ones(self.n_dim) / self.n_dim
+        else:
+            best_sol, best_fit, _ = ga.best_solution()
+            best_sol = np.clip(best_sol, 0.0, 1.0)
         best_sol /= best_sol.sum() + 1e-12
-        np.save(os.path.join(self.persistence_dir, f"pesos_{int(time.time())}.npy"), best_sol)
+        if save_weights:
+            os.makedirs(self.persistence_dir, exist_ok=True)
+            np.save(os.path.join(self.persistence_dir, f"pesos_{int(time.time())}.npy"), best_sol)
         return best_sol
 
 
-def rodar_otimizacao_ga(buscador, v_candidatos, tabela_embeddings, tabela_nomes):
+def rodar_otimizacao_ga(buscador, v_candidatos, tabela_embeddings, tabela_nomes, max_time_seconds: int = 300, save_weights: bool = False):
+    """
+    Executa a otimização de pesos via GA contínuo.
+
+    Args:
+        max_time_seconds: Tempo máximo de execução em segundos (default: 300 = 5 min).
+        save_weights: Se True, persiste os pesos otimizados em modelos/ga_pesos/.
+    """
     optimizer = GAOptimizer(buscador, v_candidatos, tabela_embeddings, tabela_nomes, k_top=config.K_TOP_FITNESS)
-    return optimizer.run()
+    return optimizer.run(max_time_seconds=max_time_seconds, save_weights=save_weights)
