@@ -28,6 +28,9 @@ class TestTradutorPTEN(unittest.TestCase):
         self.assertTrue(hasattr(self.tradutor, "_cache_pt_en"))
         self.assertTrue(hasattr(self.tradutor, "_cache_en_pt"))
         self.assertIsInstance(self.tradutor._cache_pt_en, dict)
+        # Cadeia de provedores: primário (Google) + fallback (MyMemory)
+        self.assertTrue(hasattr(self.tradutor, "_fallback_pt_en"))
+        self.assertTrue(hasattr(self.tradutor, "_fallback_en_pt"))
         # O stub morto declarava métodos com corpo '...'; a classe viva deve
         # ter métodos chamáveis e com comportamento real.
         self.assertTrue(callable(self.tradutor.pt_para_en))
@@ -47,19 +50,42 @@ class TestTradutorPTEN(unittest.TestCase):
         self.assertIn("colesterol", self.tradutor._cache_pt_en)
 
     def test_retry_e_fallback_controlado(self):
-        """Falhas esgotam as tentativas e retornam o texto original (fallback)."""
+        """Os 2 provedores falharem esgota as tentativas e retorna o original."""
         with mock.patch.object(self.tradutor.pt2en, "translate",
-                               side_effect=Exception("network down")) as mock_translate:
+                               side_effect=Exception("network down")) as mock_google, \
+             mock.patch.object(self.tradutor._fallback_pt_en, "translate",
+                               side_effect=Exception("fallback down")) as mock_fallback:
             r = self.tradutor.pt_para_en("colesterol")
 
         self.assertEqual(r, "colesterol")  # fallback controlado
-        self.assertEqual(mock_translate.call_count, self.tradutor.max_retries)
+        self.assertEqual(mock_google.call_count, self.tradutor.max_retries)
+        self.assertEqual(mock_fallback.call_count, self.tradutor.max_retries)
+
+    def test_fallback_provedor_usado_quando_google_falha(self):
+        """Google falha (TranslationNotFound) → MyMemory traduz e entra no cache."""
+        with mock.patch.object(self.tradutor.pt2en, "translate",
+                               side_effect=Exception(
+                                   "No translation was found using the current "
+                                   "translator. Try another translator?"
+                               )), \
+             mock.patch.object(self.tradutor._fallback_pt_en, "translate",
+                               return_value="dyslipidemia") as mock_fallback:
+            r1 = self.tradutor.pt_para_en("dislipidemia")
+            r2 = self.tradutor.pt_para_en("dislipidemia")
+            # 2ª chamada veio do cache → MyMemory chamado apenas 1x
+            self.assertEqual(mock_fallback.call_count, 1)
+
+        self.assertEqual(r1, "dyslipidemia")
+        self.assertEqual(r2, "dyslipidemia")
+        self.assertIn("dislipidemia", self.tradutor._cache_pt_en)
 
     def test_falha_temporaria_nao_e_cacheada(self):
         """Fallback (falha) NÃO entra no cache: permite sucesso depois."""
-        # 1ª chamada: falha (rede fora) → fallback
+        # 1ª chamada: ambos os provedores falham (rede fora) → fallback
         with mock.patch.object(self.tradutor.pt2en, "translate",
-                               side_effect=Exception("network down")):
+                               side_effect=Exception("network down")), \
+             mock.patch.object(self.tradutor._fallback_pt_en, "translate",
+                               side_effect=Exception("fallback down")):
             r1 = self.tradutor.pt_para_en("colesterol")
         self.assertEqual(r1, "colesterol")
         self.assertNotIn("colesterol", self.tradutor._cache_pt_en,
