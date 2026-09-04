@@ -98,6 +98,41 @@ class TestTradutorPTEN(unittest.TestCase):
         self.assertEqual(r2, "cholesterol")
         self.assertIn("colesterol", self.tradutor._cache_pt_en)
 
+    def test_translation_not_found_pula_retries_e_usa_fallback(self):
+        """Falha dura (TranslationNotFound) não retenta: vai direto ao MyMemory."""
+        from deep_translator.exceptions import TranslationNotFound
+
+        with mock.patch.object(
+                self.tradutor.pt2en, "translate",
+                side_effect=TranslationNotFound(
+                    "pre-eclampsia --> No translation was found")) as mock_google, \
+             mock.patch.object(self.tradutor._fallback_pt_en, "translate",
+                               return_value="pré-eclâmpsia") as mock_fallback:
+            r = self.tradutor.pt_para_en("pre-eclampsia")
+
+        self.assertEqual(r, "pré-eclâmpsia")
+        # Provedor quebrado: 1 tentativa só (sem retries/backoff)
+        self.assertEqual(mock_google.call_count, 1)
+        self.assertEqual(mock_fallback.call_count, 1)
+        self.assertIn("pre-eclampsia", self.tradutor._cache_pt_en)
+
+    def test_ambos_provedores_com_falha_dura(self):
+        """Falha dura nos 2 provedores → texto original, sem cache."""
+        from deep_translator.exceptions import TranslationNotFound
+
+        with mock.patch.object(
+                self.tradutor.pt2en, "translate",
+                side_effect=TranslationNotFound("x --> not found")) as mock_google, \
+             mock.patch.object(
+                self.tradutor._fallback_pt_en, "translate",
+                side_effect=TranslationNotFound("y --> not found")) as mock_fallback:
+            r = self.tradutor.pt_para_en("colesterol")
+
+        self.assertEqual(r, "colesterol")
+        self.assertEqual(mock_google.call_count, 1)
+        self.assertEqual(mock_fallback.call_count, 1)
+        self.assertNotIn("colesterol", self.tradutor._cache_pt_en)
+
     def test_traduz_lista(self):
         with mock.patch.object(self.tradutor.en2pt, "translate",
                                side_effect=lambda t: {"blood": "sangue",
