@@ -21,8 +21,8 @@ BIOWORDVEC_MODEL_PATH = os.path.join(BASE_DIR, "modelos", "biowordvec_500k.kv")
 ACTIVE_W2V_MODEL = 'biowordvec'
 
 # --- Caminhos dos Artefatos Gerados (Saída da Etapa 1) ---
-V_TABELAS_PATH = os.path.join(BASE_DIR, "v_tabelas.npy")
-INDEX_PATH = os.path.join(BASE_DIR, "tabelas_index.json")
+V_TABELAS_PATH = os.path.join(BASE_DIR, "asset", "v_tabelas.npy")
+INDEX_PATH = os.path.join(BASE_DIR, "asset", "tabelas_index.json")
 
 # --- Configurações dos Modelos ---
 # BERT_MODEL_NAME = 'neuralmind/bert-base-portuguese-cased'
