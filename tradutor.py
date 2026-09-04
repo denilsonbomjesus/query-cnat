@@ -27,6 +27,7 @@ temporária de rede (ou o fallback) fosse cacheada, o termo ficaria "preso" no
 texto original pelo resto do processo mesmo depois da rede voltar.
 """
 from deep_translator import GoogleTranslator, MyMemoryTranslator
+from deep_translator.exceptions import TranslationNotFound
 import logging
 import time
 
@@ -75,8 +76,22 @@ class TradutorPTEN:
                 try:
                     traduzido = provedor.translate(texto)
                     logger.debug(f"[Tradução OK] '{texto}' → '{traduzido}' ({nome})")
+                    if provedor is provedor_fallback:
+                        # Visibilidade: mostra quando o fallback (ex.: MyMemory)
+                        # resolveu — ajuda a diagnosticar provedores quebrados.
+                        logger.info(f"🔁 Tradução via fallback ({nome}): '{texto}' → '{traduzido}'")
                     cache[texto] = traduzido
                     return traduzido
+                except TranslationNotFound:
+                    # Falha "dura" do provedor (ex.: Google bloqueando a
+                    # requisição / "No translation was found..."). Tentar de
+                    # novo no MESMO provedor não ajuda — pula direto para o
+                    # próximo da cadeia, sem gastar retries nem backoff.
+                    logger.warning(
+                        f"Provedor {nome} não encontrou tradução para '{texto}'; "
+                        f"tentando próximo provedor."
+                    )
+                    break
                 except Exception as e:
                     logger.warning(
                         f"Erro na tradução de '{texto}' via {nome} "
