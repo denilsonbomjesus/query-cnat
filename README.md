@@ -165,7 +165,7 @@ python etapa1/etapa1_script1_vetorizar_tabelas.py
 Com o ambiente preparado, inicie a interface web (Streamlit):
 
 ```bash
-streamlit run app.py --server.fileWatcherType none
+streamlit run app.py
 ```
 
 ou, usando o `setup.py`:
@@ -174,16 +174,15 @@ ou, usando o `setup.py`:
 python setup.py --run
 ```
 
-> **Por que `--server.fileWatcherType none`?** O watcher padrão do Streamlit
-> (hot-reload) varre os módulos importados em busca de mudanças. O `transformers`
-> recente tem dezenas de módulos de visão (não usados por este sistema, que é
-> apenas texto) que importam `torchvision` no topo — e o `torchvision` **não**
-> está instalado de propósito. O resultado é um dilúvio de avisos do tipo
-> `ModuleNotFoundError: No module named 'torchvision'` no terminal. Esses avisos
-> são **inofensivos** (o app continua funcionando), mas poluem o log; desligar o
-> watcher elimina todo o ruído e é a configuração recomendada para produção.
-> Se quiser hot-reload durante o desenvolvimento, pode rodar sem a flag — os
-> avisos do `torchvision` aparecem, mas nada quebra.
+> **Watcher desligado automaticamente:** o arquivo `.streamlit/config.toml` já
+> define `fileWatcherType = "none"`, então o `streamlit run app.py` puro já
+> silencia o watcher. Sem isso, o watcher padrão (hot-reload) varre os módulos
+> importados e o `transformers` recente dispara centenas de avisos do tipo
+> `ModuleNotFoundError: No module named 'torchvision'` — módulos de **visão**
+> que este sistema (somente texto) não usa; o `torchvision` não está instalado
+> de propósito. Esses avisos são **inofensivos** (o app continua funcionando),
+> mas poluem o log. Se quiser hot-reload durante o desenvolvimento, remova ou
+> altere o `.streamlit/config.toml` — os avisos voltam, mas nada quebra.
 
 Acesse no navegador o endereço exibido no terminal (padrão: `http://localhost:8501`).
 
@@ -292,7 +291,10 @@ São ~13 GB da NCBI — é esperado. O `setup.py` pula se o arquivo já existir.
 O `tradutor.py` usa uma **cadeia de provedores**: primeiro o Google Translate; se falhar (ex.: `No translation was found using the current translator` — rate-limit/captcha do Google), tenta o **MyMemoryTranslator** (gratuito, sem chave) e só então, esgotados os dois, usa a consulta original como fallback. Cada provedor tem retry de 3 tentativas com backoff, e o cache guarda apenas traduções bem-sucedidas. A expansão semântica funciona melhor com internet, mas degrada bem menos quando um provedor específico falha.
 
 **"Terminal cheio de `ModuleNotFoundError: No module named 'torchvision'` ao iniciar o app."**
-Inofensivo e esperado: é o watcher do Streamlit (hot-reload) sondando módulos de visão do `transformers` que o sistema não usa (o `torchvision` não está instalado de propósito). Rode com `streamlit run app.py --server.fileWatcherType none` (ou `python setup.py --run`) para silenciar — é o comando recomendado neste README.
+Inofensivo e esperado: é o watcher do Streamlit (hot-reload) sondando módulos de visão do `transformers` que o sistema não usa (o `torchvision` não está instalado de propósito). O `.streamlit/config.toml` do projeto já desliga o watcher (`fileWatcherType = "none"`) — se os avisos aparecem mesmo assim, seu checkout está desatualizado: rode `git pull origin reprodutibilidade` e reinicie o app.
+
+**"Os termos candidatos aparecem em inglês / não voltam para o português."**
+O BioWordVec (Word2Vec médico em inglês) expande **sempre** em inglês, e a tradução de volta EN→PT é feita pelo `tradutor.py` (Google → MyMemory). Se a consulta já estiver em inglês (ex.: `pre-eclampsia`) ou a rede bloquear o Google (`No translation was found using the current translator`), o sistema usa o MyMemory como fallback — e, esgotados os dois, mantém o termo original. Os termos que alimentam o ranking são sempre traduzidos de volta ao português, pois o BERT de ranking e as tabelas são em PT.
 
 **"O app está lento na primeira consulta."**
 A primeira execução carrega os modelos BERT e o BioWordVec na memória (pode levar alguns minutos). Depois, ficam em cache.
@@ -309,5 +311,5 @@ Por padrão **não são persistidos** (evita acúmulo de arquivos). Para persist
 
 - **GPU opcional**: o código detecta CUDA automaticamente; o `pip install torch` padrão instala a versão CPU. Para GPU, instale a build CUDA do PyTorch.
 - **Cache HuggingFace**: os modelos BERT ficam em `~/.cache/huggingface`. Em servidores, defina `HF_HOME` para um caminho persistente compartilhado.
-- **Internet em runtime**: a tradução PT→EN usa Google Translate com fallback para MyMemory; sem internet, o sistema degrada com fallback para o texto original (a qualidade da expansão reduz).
+- **Internet em runtime**: a tradução PT→EN e EN→PT usa Google Translate com fallback para MyMemory (sem chave); sem internet, o sistema degrada com fallback para o texto original (a qualidade da expansão reduz). O fallback pula os retries quando o provedor falha com "não encontrou tradução" (falha dura), então a degradação é rápida.
 - **Branch de desenvolvimento**: o trabalho de reprodutibilidade (timeouts, determinismo, testes) está na branch `reprodutibilidade`.
