@@ -1,7 +1,16 @@
 # diretórios de configuração
 /venv
+
+# modelos pesados (não versionar)
 /biowordvec_model
 /modelos
+
+# bytecode Python
+__pycache__/
+*.pyc
+
+# template de regras de commit (uso local, não versionar)
+bugs/REGRAS-DE-COMMIT.md
 
 # arquivos de configuração
 SEGUNDA-ETAPA.md
