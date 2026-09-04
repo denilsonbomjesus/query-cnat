@@ -5,8 +5,13 @@
 # repetidas, sem retry, gerando erros intermitentes e não-determinismo.
 # Estes testes garantem: (1) classe única viva com cache funcionando; (2)
 # retry com fallback controlado; (3) cache só armazena traduções bem-sucedidas.
+import os
+import sys
 import unittest
 from unittest import mock
+
+# Adicionar o diretório raiz do projeto ao sys.path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from tradutor import TradutorPTEN
 
