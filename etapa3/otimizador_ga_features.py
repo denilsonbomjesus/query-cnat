@@ -169,7 +169,7 @@ class GAFeatureSelector:
             self._timeout_atingido = True
             return "stop"
 
-    def run(self, max_time_seconds: int = 120):
+    def run(self, max_time_seconds: int = 120, random_seed: int = None):
         """
         Configura e executa a otimização com o Algoritmo Genético.
 
@@ -180,6 +180,11 @@ class GAFeatureSelector:
         Args:
             max_time_seconds: Tempo máximo total de execução em segundos.
                               Se excedido, retorna a melhor solução encontrada.
+            random_seed: Seed para reprodutibilidade. Se None (default),
+                         o PyGAD re-semeia a partir da entropia do sistema a
+                         cada instância (comportamento original, estocástico).
+                         Passe um inteiro para resultados determinísticos
+                         (usado em testes).
         """
         if self.num_genes == 0:
             logging.warning("Nenhum gene (coluna) para otimizar. Retornando resultado vazio.")
@@ -211,7 +216,8 @@ class GAFeatureSelector:
             mutation_type="random",
             mutation_probability=self.mutation_probability,
             on_generation=self.on_generation_timeout,
-            parallel_processing=1  # Desabilitado para evitar stall/contenda de threads
+            parallel_processing=1,  # Desabilitado para evitar stall/contenda de threads
+            random_seed=random_seed  # None = estocástico (default); int = determinístico
         )
 
         start = time.time()
@@ -237,7 +243,8 @@ def rodar_ga_feature_selection(
     user_query_vector: np.ndarray,
     table_columns_metadata: List[Dict[str, Any]],
     table_columns_vectors: Dict[str, np.ndarray],
-    max_time_seconds: int = 120
+    max_time_seconds: int = 120,
+    random_seed: int = None
 ) -> (np.ndarray, float):
     """
     Função de orquestração para executar o GA de seleção de features.
@@ -245,11 +252,16 @@ def rodar_ga_feature_selection(
     Args:
         max_time_seconds: Tempo máximo de execução (default 120 s). Propagado a
                           partir de app.py / utilitários de validação.
+        random_seed: Seed para reprodutibilidade (None = estocástico).
+                     Usado em testes para evitar flakiness.
     """
     optimizer = GAFeatureSelector(
         user_query_vector=user_query_vector,
         table_columns_metadata=table_columns_metadata,
         table_columns_vectors=table_columns_vectors
     )
-    best_solution, best_fitness = optimizer.run(max_time_seconds=max_time_seconds)
+    best_solution, best_fitness = optimizer.run(
+        max_time_seconds=max_time_seconds,
+        random_seed=random_seed
+    )
     return best_solution, best_fitness

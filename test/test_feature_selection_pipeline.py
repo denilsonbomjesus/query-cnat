@@ -60,10 +60,14 @@ class TestFeatureSelectionPipeline(unittest.TestCase):
         self.assertEqual(user_query_vector.shape, (768,))
 
         # 5. Executar o GA de seleção de features
+        # random_seed fixo para o teste ser determinístico (não-flaky):
+        # sem seed, o PyGAD re-semeia a partir da entropia do sistema a cada
+        # execução e a coluna esperada pode não ser selecionada por acaso.
         solution, fitness = rodar_ga_feature_selection(
             user_query_vector=user_query_vector,
             table_columns_metadata=columns_metadata,
-            table_columns_vectors=columns_vectors
+            table_columns_vectors=columns_vectors,
+            random_seed=0
         )
 
         # 6. Validar os resultados
