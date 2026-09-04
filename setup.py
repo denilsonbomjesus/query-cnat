@@ -282,7 +282,7 @@ def instrucoes_finais(run_app=False):
         ativar = "source venv/bin/activate"
         print(f"  Ativar o ambiente:              {ativar}")
 
-    print(f"  Iniciar a interface:            streamlit run app.py --server.fileWatcherType none")
+    print(f"  Iniciar a interface:            streamlit run app.py")
     print(f"  (ou rode:                       python setup.py --run)")
 
     if run_app:
