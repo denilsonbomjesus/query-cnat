@@ -1,0 +1,12 @@
+# Streamlit: desliga o file watcher (hot-reload) por padrão.
+#
+# Motivo: o watcher padrão varre os módulos importados em busca de mudanças
+# e, ao sondar o transformers, dispara centenas de avisos
+# "ModuleNotFoundError: No module named 'torchvision'" — módulos de visão que
+# este sistema (somente texto) não usa, e o torchvision não está instalado
+# de propósito. Com fileWatcherType = "none" esses avisos desaparecem e o
+# auto-reload fica desligado (configuração recomendada para produção).
+#
+# Equivale a rodar: streamlit run app.py --server.fileWatcherType none
+[server]
+fileWatcherType = "none"

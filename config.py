@@ -21,8 +21,8 @@ BIOWORDVEC_MODEL_PATH = os.path.join(BASE_DIR, "modelos", "biowordvec_500k.kv")
 ACTIVE_W2V_MODEL = 'biowordvec'
 
 # --- Caminhos dos Artefatos Gerados (Saída da Etapa 1) ---
-V_TABELAS_PATH = os.path.join(BASE_DIR, "v_tabelas.npy")
-INDEX_PATH = os.path.join(BASE_DIR, "tabelas_index.json")
+V_TABELAS_PATH = os.path.join(BASE_DIR, "asset", "v_tabelas.npy")
+INDEX_PATH = os.path.join(BASE_DIR, "asset", "tabelas_index.json")
 
 # --- Configurações dos Modelos ---
 # BERT_MODEL_NAME = 'neuralmind/bert-base-portuguese-cased'
@@ -30,6 +30,11 @@ BERT_MODEL_NAME = 'pucpr/biobertpt-all'
 BERT_EN_MODEL_NAME = 'dmis-lab/biobert-base-cased-v1.1'
 
 # --- Configurações do AG (Etapa 3) ---
+# NOTA (Bug E): 'crossover_type' reflete o que o código realmente usa
+# (etapa3/otimizador_ga.py e etapa3/otimizador_ga_features.py leem esta chave
+# com fallback para 'single_point'). Parada antecipada NÃO é implementada no
+# PyGAD usado aqui — por isso a chave 'max_iteration_without_improv' foi
+# removida (estava declarada mas nunca era lida por nenhum módulo).
 GA_PARAMS = {
     'max_num_iteration': 50,      # (Número de Gerações)
     'population_size': 100,       # (Tamanho da População)
@@ -37,7 +42,6 @@ GA_PARAMS = {
     'elit_ratio': 0.01,           # (Taxa de Elitismo)
     'crossover_probability': 0.5, # (Taxa de Crossover)
     'parents_portion': 0.3,       # (Seleção por Torneio)
-    'crossover_type': 'uniform',  # (Tipo de Crossover)
-    'max_iteration_without_improv': 5 # (Parada antecipada)
+    'crossover_type': 'single_point'  # (Tipo de Crossover usado pelo código)
 }
 K_TOP_FITNESS = 20 # K tabelas usadas no cálculo do Fitness

@@ -50,3 +50,11 @@ def baixar_modelo(url, destino):
     except Exception as e:
         logging.error(f"❌ Erro ao baixar o modelo: {e}")
         raise
+
+# ================================================================
+# EXECUÇÃO PRINCIPAL
+# ================================================================
+if __name__ == "__main__":
+    logging.info("=== INICIANDO ETAPA 1 (SCRIPT 3): DOWNLOAD BIOWORDVEC ===")
+    baixar_modelo(BIOWORDVEC_URL, BIOWORDVEC_PATH)
+    logging.info("--- ETAPA 1 (SCRIPT 3) CONCLUÍDA ---")

@@ -1,7 +1,13 @@
 # diretórios de configuração
 /venv
+
+# modelos pesados (não versionar)
 /biowordvec_model
 /modelos
+
+# bytecode Python
+__pycache__/
+*.pyc
 
 # arquivos de configuração
 SEGUNDA-ETAPA.md

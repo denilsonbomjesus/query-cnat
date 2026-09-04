@@ -78,6 +78,53 @@ class TestGAFeatureSelector(unittest.TestCase):
         # O índice da col_b é 1
         self.assertEqual(solution[1], 0, "A pior coluna (col_b) não deveria ter sido selecionada.")
 
+    def test_run_ga_com_max_time_seconds(self):
+        """max_time_seconds deve ser propagado e o GA deve rodar normalmente."""
+        solution, fitness = rodar_ga_feature_selection(
+            user_query_vector=self.user_query_vector,
+            table_columns_metadata=self.columns_metadata,
+            table_columns_vectors=self.columns_vectors,
+            max_time_seconds=60
+        )
+
+        self.assertIsInstance(solution, np.ndarray)
+        self.assertEqual(solution.shape[0], len(self.column_names))
+        self.assertTrue(np.all(np.isin(solution, [0, 1])))
+        self.assertIsInstance(fitness, float)
+
+    def test_run_ga_timeout_nao_estoura(self):
+        """
+        Timeout extremamente curto NÃO pode levantar exceção nem travar:
+        o GA deve parar e devolver uma solução degradada (watchdog Bug A/B).
+        """
+        selector = GAFeatureSelector(
+            user_query_vector=self.user_query_vector,
+            table_columns_metadata=self.columns_metadata,
+            table_columns_vectors=self.columns_vectors
+        )
+
+        # Força timeout imediato (primeira avaliação de fitness já estoura)
+        solution, fitness = selector.run(max_time_seconds=0.000000001)
+
+        self.assertIsInstance(solution, np.ndarray)
+        self.assertEqual(solution.shape[0], len(self.column_names))
+        # Solução degradada: ou vazia (nenhuma geração concluída) ou binária válida
+        if solution.size > 0:
+            self.assertTrue(np.all(np.isin(solution, [0, 1])))
+        self.assertIsInstance(fitness, float)
+
+    def test_fitness_function_direto_sem_run(self):
+        """fitness_function chamada diretamente (sem run) não pode quebrar."""
+        selector = GAFeatureSelector(
+            user_query_vector=self.user_query_vector,
+            table_columns_metadata=self.columns_metadata,
+            table_columns_vectors=self.columns_vectors
+        )
+        solution = np.array([1, 0, 1, 0])
+        fitness = selector.fitness_function(None, solution, 0)
+        self.assertIsInstance(fitness, float)
+        self.assertGreater(fitness, 0.0)
+
 
 if __name__ == '__main__':
     unittest.main()
